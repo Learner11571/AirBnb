@@ -1,22 +1,68 @@
 <% layout("/layouts/boilerplate") %>
-  <script>
-    function initMap() {
-      const location = {
-        lat: <%= listing.coordinates.coordinates[1] %>,
-        lng: <%= listing.coordinates.coordinates[0] %>,
-      };
+<script>
+  function initMap() {
+    const map = new google.maps.Map(document.getElementById('map'), {
+      zoom: 15,
+      center: { lat: <%= listing.coordinates.coordinates[1] %>, lng: <%= listing.coordinates.coordinates[0] %> },
+      mapTypeId: google.maps.MapTypeId.ROADMAP
+    });
 
-      var map = new google.maps.Map(document.getElementById('map'), {
-        zoom: 12,
-        center: location,
-      });
+    const bounds = new google.maps.LatLngBounds();
 
-      var marker = new google.maps.Marker({
-        position: location,
-        map: map,
+    // 🏡 Hotel Marker (Home Icon & Bigger)
+    const hotelLocation = { lat: <%= listing.coordinates.coordinates[1] %>, lng: <%= listing.coordinates.coordinates[0] %> };
+    const hotelMarker = new google.maps.Marker({
+      position: hotelLocation,
+      map: map,
+      title: "Hotel Location",
+      icon: {
+        url: "/homesvg.svg", // Replace with a custom home icon URL
+        scaledSize: new google.maps.Size(55, 55) // Bigger than others
+      }
+    });
+
+    bounds.extend(hotelLocation);
+
+    // 🎯 Amenities markers (Loop through places object)
+    const places = <%- JSON.stringify(places) %>;
+    const categoryIcons = {
+      gym: "http://maps.google.com/mapfiles/ms/icons/orange-dot.png",
+      theatre: "http://maps.google.com/mapfiles/ms/icons/red-dot.png",
+      food: "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png",
+      hospital: "http://maps.google.com/mapfiles/ms/icons/purple-dot.png",
+      banks: "http://maps.google.com/mapfiles/ms/icons/green-dot.png",
+      ATM: "http://maps.google.com/mapfiles/ms/icons/darkgreen-dot.png",
+      religious: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png",
+      tourist: "http://maps.google.com/mapfiles/ms/icons/cyan-dot.png"
+    };
+
+    Object.keys(places).forEach(category => {
+      places[category].forEach(place => {
+        const marker = new google.maps.Marker({
+          position: place.location,
+          map: map,
+          title: place.name,
+          icon: {
+            url: categoryIcons[category] || "http://maps.google.com/mapfiles/ms/icons/blue-dot.png", // Default fallback
+            scaledSize: new google.maps.Size(40, 40) // Smaller than hotel marker
+          }
+        });
+
+        bounds.extend(place.location);
       });
-    }
-  </script>
+    });
+
+    // Automatically adjust zoom and center
+    map.fitBounds(bounds);
+
+    google.maps.event.addListenerOnce(map, 'bounds_changed', function() {
+      if (map.getZoom() > 16) { // Adjust zoom level as needed
+        map.setZoom(16);
+      }
+    });
+  }
+</script>
+
   <script async defer
     src="https://maps.googleapis.com/maps/api/js?key=<%=process.env.MAP_API_KEY%>&callback=initMap&libraries=places"></script>
   <div class="row mt-3">
@@ -36,7 +82,7 @@
         <p class="card-text">
           <%= listing.description %>
         </p>
-        <p class="card-text">&#8377; <%= listing.price.toLocaleString("en-IN") %>
+        <p class="card-text">&#8377; <%= (listing.price*1.18).toLocaleString("en-IN") %>(including taxes)
         </p>
         <p class="card-text">
           <%= listing.location %>
@@ -73,6 +119,13 @@
         </div>
       </div>
       <% } %>
+      <div class="col-8 offset-3 mb-3">
+      <% if(currUser && !currUser.equals(listing.owner._id)){ %>
+        <form method="post" action="/listings/<%= listing._id %>">
+          <button type="submit" class="btn btn-dark">Book</button>
+        </form>
+      <% } %>
+    </div>
         <div class="col-8 offset-3 mb-3">
           <hr>
           <% if(currUser) {%>
@@ -129,9 +182,30 @@
                   </div>
                   <% } %>
               </div>
-              <div class="col-8 offset-1 mb-3">
+              <div class="col-8 offset-2 mb-3">
                 <h3>Where you'll be</h3>
-                <div class="offset-1" id="map">
+                <div id="map">
+                </div>
+                <h4>Nearby Places</h4>
+                <div id="places-container">
+                  <% Object.keys(places).forEach(category=> { %>
+                    <% places[category].forEach(place=> { %>
+                      <div class="place-card">
+                        <h5>
+                          <%= place.name %>
+                        </h5>
+                        <p><strong>Category:</strong>
+                          <%= category.charAt(0).toUpperCase() + category.slice(1) %>
+                        </p>
+                        <p><strong>Address:</strong>
+                          <%= place.address || "Not Available" %>
+                        </p>
+                        <% if (place.photo) { %>
+                          <img src="<%= place.photo %>" alt="<%= place.name %>" class="place-photo">
+                          <% } %>
+                      </div>
+                      <% }) %>
+                        <% }) %>
                 </div>
               </div>
         </div>

@@ -89,11 +89,6 @@ body{
     font-weight: 400;
 }
 
-#map { 
-    height: 400px;
-    width: 100%;
- }
-
 .btn-danger{
     margin-left: 3rem;
 }
@@ -131,4 +126,52 @@ body{
 
 #success{
     display: none;
+}
+
+#map { 
+    height: 400px;
+    width: 100%;
+    margin-bottom: 20px;
+  }
+
+  #places-container {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.place-card {
+  border: 1px solid #ddd;
+  padding: 10px;
+  border-radius: 8px;
+  width: 250px;
+  text-align: center;
+  box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden; /* Prevents content overflow */
+}
+
+.place-card h5 {
+  font-size: 16px;
+  font-weight: bold;
+  white-space: nowrap; /* Prevents text from breaking into multiple lines */
+  overflow: hidden; /* Hides overflowing text */
+  text-overflow: ellipsis; /* Adds "..." for long names */
+  width: 100%;
+  display: block;
+  cursor: pointer; /* Shows it's interactive */
+}
+
+.place-card h5:hover {
+  white-space: normal; /* Show full text on hover */
+  word-wrap: break-word; /* Break long words */
+  overflow: visible; /* Allow full visibility */
+}
+
+.place-photo {
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+  margin-top: 5px;
 }

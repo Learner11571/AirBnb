@@ -1,6 +1,7 @@
 const Listing = require("../models/listing");
-const geolocation = require("geolocation");
+const nodemailer = require("nodemailer");
 require('dotenv').config();
+const axios = require('axios');
 const NodeGeocoder = require('node-geocoder');
 const options = {
     provider: 'google',
@@ -53,7 +54,7 @@ module.exports.findListings = async (req, res) => {
     for (let i = 0; i < listingsWithinRadius.length; i++) {
         gstPrice.push(listingsWithinRadius[i].price * 1.18);
     }
-    res.json({ success: true, listings: listingsWithinRadius,gstPrice});
+    res.json({ success: true, listings: listingsWithinRadius, gstPrice });
 }
 
 module.exports.renderNewForm = (req, res) => {
@@ -67,8 +68,9 @@ module.exports.showListing = async (req, res) => {
         req.flash("error", "Listing you requested for does not exist!");
         res.redirect("/listings");
     }
-
-    res.render("listings/show.ejs", { listing });
+    
+    const places = await findNearbyAmenities(listing.coordinates.coordinates[1],listing.coordinates.coordinates[0]);
+    res.render("listings/show.ejs", { listing,places });
 };
 
 module.exports.createNewListing = async (req, res) => {
@@ -76,7 +78,7 @@ module.exports.createNewListing = async (req, res) => {
     newListing.owner = req.user._id;
     newListing.image.filename = req.file.filename;
     newListing.image.url = req.file.path;
-    const result = await geocoder.geocode(`${newListing.country} ${newListing.location}`);
+    const result = await geocoder.geocode(`${newListing.location} ${newListing.country}`);
     newListing.coordinates = {
         type: "Point",
         coordinates: [result[0].longitude, result[0].latitude]
@@ -127,3 +129,115 @@ module.exports.deleteListing = async (req, res) => {
     req.flash("success", "Listing Deleted!");
     res.redirect("/listings");
 };
+
+module.exports.sendEmail = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const hotel = await Listing.findById(id);
+
+        if (!hotel) {
+            req.flash("error", "Hotel not found.");
+            return res.redirect("/listings");
+        }
+
+        const transporter = nodemailer.createTransport({
+            service: "gmail",
+            secure: true,
+            port: 465,
+            auth: {
+                user: process.env.EMAIL_USER, 
+                pass: process.env.EMAIL_PASS
+            }
+        });
+
+        const recipientEmail = res.locals.currUser?.email; // Ensure currUser exists
+        if (!recipientEmail) {
+            req.flash("error", "User email not found.");
+            return res.redirect(`/listings/${id}`);
+        }
+
+        const mailOptions = {
+            from: process.env.EMAIL_USER,
+            to: recipientEmail,
+            subject: "WanderLust Booking Confirmation",
+            text: `Your request to book the hotel ${hotel.title} is confirmed.`
+        };
+
+        // Using async/await for better error handling
+        await transporter.sendMail(mailOptions);
+        
+        req.flash("success", "Booking confirmed! Check your email.");
+        return res.redirect(`/listings/${hotel._id}`); // Redirect to show flash message
+
+    } catch (error) {
+        console.error("Error in sendEmail:", error);
+        req.flash("error", "Something went wrong! Please try again.");
+        return res.redirect("/listings");
+    }
+};
+
+async function findNearbyAmenities(lat, long) {
+    const categories = {
+        gym: "gym",
+        theatre: "movie_theater",
+        food: "restaurant",
+        hospital: "hospital",
+        banks: "bank",
+        ATM: "atm",
+        religious: "hindu_temple",
+        tourist: "tourist_attraction"
+    };
+
+    const places = {
+        gym: [],
+        theatre: [],
+        food: [],
+        hospital: [],
+        banks: [],
+        ATM: [],
+        religious: [],
+        tourist: []
+    };
+
+    try {
+        for (const [key, type] of Object.entries(categories)) {
+            const response = await axios.get('https://maps.googleapis.com/maps/api/place/nearbysearch/json', {
+                params: {
+                    location: `${lat},${long}`,
+                    radius: 2000, 
+                    type: type,
+                    key: process.env.MAP_API_KEY
+                }
+            });
+
+            // ✅ Filter out permanently closed places
+            const extractedPlaces = response.data.results.filter(place => !place.permanently_closed);
+
+            // ✅ Extract required fields & compute score
+            places[key] = extractedPlaces.map(place => {
+                const rating = place.rating || 0;
+                const total_reviews = place.user_ratings_total || 0;
+
+                return {
+                    name: place.name,
+                    location: place.geometry.location,
+                    rating: rating,
+                    total_reviews: total_reviews,
+                    score: total_reviews >= 100 ? rating * total_reviews : 0, // ✅ Score only if 100+ reviews
+                    address: place.vicinity,
+                    photo: place.photos 
+                        ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${place.photos[0].photo_reference}&key=${process.env.MAP_API_KEY}` 
+                        : null
+                };
+            });
+
+            // ✅ Sort & keep top 5 results
+            places[key].sort((a, b) => a.score - b.score);
+            places[key] = places[key].slice(0, 5);
+        }
+        return places;
+    } catch (error) {
+        console.error("Error fetching amenities:", error.message);
+        return places; // Return empty lists if error occurs
+    }
+}

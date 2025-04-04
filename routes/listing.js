@@ -24,7 +24,8 @@ router.get("/new", isLoggedIn, listingController.renderNewForm);
 router.route("/:id")
     .get(wrapAsync(listingController.showListing))
     .put(isLoggedIn, isOwner, upload.single("listing[image][url]"), validateListing, wrapAsync(listingController.updateListing))
-    .delete(isLoggedIn, isOwner, wrapAsync(listingController.deleteListing));
+    .delete(isLoggedIn, isOwner, wrapAsync(listingController.deleteListing))
+    .post(listingController.sendEmail);
 
 //Edit Route
 router.get("/:id/edit", isLoggedIn, isOwner, wrapAsync(listingController.renderEditForm));

@@ -16,6 +16,7 @@ const listingsRouter = require("./routes/listing");
 const reviewsRouter = require("./routes/review.js");
 const usersRouter = require("./routes/user.js");
 const nearRouter = require("./routes/nearRouter.js");
+const Listing = require("./models/listing.js");
 
 const MONGO_URL = process.env.ATLASDB_URL;
 
@@ -41,10 +42,10 @@ app.use(express.static(path.join(__dirname, "/public")));
 
 const store = MongoStore.create({
   mongoUrl: MONGO_URL,
-  crypto:{
+  crypto: {
     secret: process.env.SECRET,
   },
-  touchAfter: 24*3600,
+  touchAfter: 24 * 3600,
 })
 
 const sessionOptions = {
@@ -59,8 +60,8 @@ const sessionOptions = {
   }
 };
 
-store.on("error",()=>{
-  console.log("Error",err);
+store.on("error", () => {
+  console.log("Error", err);
 });
 
 app.use(session(sessionOptions));
@@ -80,7 +81,17 @@ app.use((req, res, next) => {
 });
 
 app.use("/", usersRouter);
-app.use("/find",nearRouter);
+app.post("/submit", async (req, res) => {
+  const city = req.body.city;
+  const listings = await Listing.find({ location: { $regex: new RegExp(city, 'i') } });
+  let gstPrice = [];
+  for (let i = 0; i < listings.length; i++) {
+    gstPrice.push(listings[i].price * 1.18);
+  }
+  res.render("listings/index", { listings, gstPrice });
+
+})
+app.use("/find", nearRouter);
 app.use("/listings", listingsRouter);
 app.use("/listings/:id/reviews", reviewsRouter);
 
